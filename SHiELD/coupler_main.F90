@@ -100,9 +100,9 @@ implicit none
    integer :: restart_duration_days_aux = 0  !< Duration in days for auxiliary restart files
    integer :: restart_duration_secs_aux = 0  !< Duration in seconds for auxiliary restart files
    integer :: atmos_nthreads = 1  !< Number of OpenMP threads to use in the atmosphere
+   integer :: iau_offset = 0  !< IAU window length in hours
    logical :: use_hyper_thread = .false.  !< If .TRUE>, affinity placement (if activated) will consider virtual cores
                                           !! in the placement algorithm
-   integer :: iau_offset = 0
 
 
    namelist /coupler_nml/ current_date, calendar, force_date_from_namelist, &
@@ -386,8 +386,8 @@ contains
          'atmos time step is not a multiple of the ocean time step', FATAL)
 
 !------ initialize component models ------
-    call  atmos_model_init (Atm,  Time_init, Time_atmos, Time_step_atmos, &
-                            iau_offset)
+    Atm%iau_offset = iau_offset
+    call  atmos_model_init (Atm,  Time_init, Time_atmos, Time_step_atmos)
 
     call fms_memutils_print_memuse_stats('after atmos model init')
 

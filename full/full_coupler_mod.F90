@@ -140,6 +140,7 @@ module full_coupler_mod
   !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
   !! is all zero, no intermediate restart file will be written out
   integer, dimension(6), public :: restart_interval = (/ 0, 0, 0, 0, 0, 0/)
+  integer, dimension(6), public :: restart_start = (/ 0, 0, 0, 0, 0, 0/)
 
   !> The date that the current integration starts with.  (See
   !! force_date_from_namelist.)
@@ -173,6 +174,7 @@ module full_coupler_mod
   integer, public :: atmos_nthreads=1 !< Number of OpenMP threads to use in the atmosphere
   integer, public :: ocean_nthreads=1 !< Number of OpenMP threads to use in the ocean
   integer, public :: radiation_nthreads=1 !< Number of threads to use for the radiation.
+  integer, public :: iau_offset = 0 !< IAU window length in hours
 
   !> Indicates if this component should be executed.  If .FALSE., then execution is skipped.
   !! This is used when ALL the output fields sent by this component to the coupler have been
@@ -221,12 +223,14 @@ module full_coupler_mod
   logical, public :: use_hyper_thread = .false.
 
   namelist /coupler_nml/ current_date, calendar, force_date_from_namelist,         &
-                         months, days, hours, minutes, seconds, dt_cpld, dt_atmos, &
+                         months, days, hours, minutes, seconds, iau_offset,        &
+                         dt_cpld, dt_atmos, &
                          do_atmos, do_land, do_ice, do_ocean, do_flux,             &
                          atmos_npes, ocean_npes, ice_npes, land_npes,              &
                          atmos_nthreads, ocean_nthreads, radiation_nthreads,       &
                          concurrent, do_concurrent_radiation, use_lag_fluxes,      &
-                         check_stocks, restart_interval, do_debug, do_chksum,      &
+                         check_stocks, restart_interval, restart_start,            &
+                         do_debug, do_chksum, &
                          use_hyper_thread, concurrent_ice, slow_ice_with_ocean,    &
                          do_endpoint_chksum, combined_ice_and_ocean
 
@@ -808,8 +812,13 @@ contains
     else
        Time_restart = fms_time_manager_set_date(date_restart(1), date_restart(2), date_restart(3),  &
                                date_restart(4), date_restart(5), date_restart(6) )
-       Time_restart = fms_time_manager_increment_date(Time_restart, restart_interval(1), restart_interval(2), &
-            restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
+       if (ALL(restart_start ==0)) then
+          Time_restart = fms_time_manager_increment_date(Time_restart, restart_interval(1), restart_interval(2), &
+               restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
+       else
+          Time_restart = fms_time_manager_increment_date(Time_restart, restart_start(1), restart_start(2), &
+               restart_start(3), restart_start(4), restart_start(5), restart_start(6) )
+       endif
        if (Time_restart <= Time) call fms_mpp_error(FATAL, &
             '==>Error from program coupler: The first intermediate restart time is no larger than the start time')
     endif
@@ -905,6 +914,7 @@ contains
         endif
 
         call fms_mpp_clock_begin(coupler_clocks%atmos_model_init)
+        Atm%iau_offset = iau_offset 
         call atmos_model_init( Atm, Time_init, Time, Time_step_atmos, &
                                do_concurrent_radiation)
         call fms_mpp_clock_end(coupler_clocks%atmos_model_init)
