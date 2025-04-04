@@ -327,7 +327,8 @@ contains
       Ocean_ice_boundary, Ice_ocean_boundary, Land_ice_atmos_boundary, Land_ice_boundary,              &
       Ice_ocean_driver_CS, Ice_bc_restart, Ocn_bc_restart, ensemble_pelist, slow_ice_ocean_pelist, conc_nthreads, &
       coupler_clocks, coupler_components_obj, coupler_chksum_obj, Time_step_cpld, Time_step_atmos, Time_atmos, &
-      Time_ocean, num_cpld_calls, num_atmos_calls, Time, Time_start, Time_end, Time_restart, Time_restart_current)
+      Time_ocean, num_cpld_calls, num_atmos_calls, Time, Time_start, Time_end, Time_restart, Time_restart_current, &
+      restart_first_time_step)
 
     implicit none
 
@@ -357,6 +358,7 @@ contains
     type(FMSTime_type), intent(inout) :: Time, Time_start, Time_end, Time_restart, Time_restart_current
 
     integer, intent(inout) :: num_cpld_calls, num_atmos_calls
+    logical, intent(out)   :: restart_first_time_step
 !
 !-----------------------------------------------------------------------
 !     local parameters
@@ -807,12 +809,14 @@ contains
     endif
 
     Time_restart_current = Time
+    restart_first_time_step = .False.
     if (ALL(restart_interval ==0)) then
        Time_restart = fms_time_manager_increment_date(Time_end, 0, 0, 10, 0, 0, 0)   ! no intermediate restart
     else
        Time_restart = fms_time_manager_set_date(date_restart(1), date_restart(2), date_restart(3),  &
                                date_restart(4), date_restart(5), date_restart(6) )
        if (ALL(restart_start ==0)) then
+          restart_first_time_step = .True.
           Time_restart = fms_time_manager_increment_date(Time_restart, restart_interval(1), restart_interval(2), &
                restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
        else
@@ -2357,7 +2361,7 @@ contains
   !! is produced in the latter calls.  Time_restart is the next timestep where the intermediate restart
   !! file will be written out.  Time_restart_current records the current restart time.
   subroutine coupler_intermediate_restart(Atm, Ice, Ocean, Ocean_state, Ocn_bc_restart, Ice_bc_restart,&
-                                          Time_current, Time_restart, Time_restart_current, Time_start)
+                                          Time_current, Time_restart, Time_restart_current, Time_start, nc)
 
     implicit none
     type(atmos_data_type),   intent(inout) :: Atm    !< Atm
@@ -2371,6 +2375,7 @@ contains
     !! Time_restart_current records the current timestep the restart file is being written.
     !! Time_restart_current does not necessary = Time_restart.
     type(FmsTime_type), intent(inout) :: Time_restart, Time_restart_current
+    integer, intent(in) :: nc      !< coupled timestep loop index
     character(len=32) :: timestamp !< Time in string
     integer :: outunit             !< stdout
 
@@ -2390,8 +2395,10 @@ contains
     call coupler_restart(Atm, Ice, Ocean, Ocn_bc_restart, Ice_bc_restart, &
                          Time_current, Time_restart_current, Time_start, timestamp)
 
-    Time_restart = fms_time_manager_increment_date(Time_current, restart_interval(1), restart_interval(2), &
-                   restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
+    if (nc > 1) then
+      Time_restart = fms_time_manager_increment_date(Time_current, restart_interval(1), restart_interval(2), &
+                     restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
+    endif
 
   end subroutine coupler_intermediate_restart
 

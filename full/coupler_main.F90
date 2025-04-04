@@ -377,6 +377,7 @@ program coupler_main
   integer, allocatable :: slow_ice_ocean_pelist(:)
   integer :: conc_nthreads = 1
   real :: dsec, omp_sec(2)=0.0, imb_sec(2)=0.0
+  logical :: restart_first_time_step
 
   call fms_mpp_init()
 
@@ -393,7 +394,8 @@ program coupler_main
     Ice_ocean_driver_CS, Ice_bc_restart, Ocn_bc_restart, ensemble_pelist, slow_ice_ocean_pelist, &
     conc_nthreads, coupler_clocks, coupler_components_obj, coupler_chksum_obj, &
     Time_step_cpld, Time_step_atmos, Time_atmos, Time_ocean, num_cpld_calls,   &
-    num_atmos_calls, Time, Time_start, Time_end, Time_restart, Time_restart_current)
+    num_atmos_calls, Time, Time_start, Time_end, Time_restart, Time_restart_current, &
+    restart_first_time_step)
 
   if (do_chksum) call coupler_chksum_obj%get_coupler_chksums('coupler_init+', 0)
 
@@ -660,9 +662,9 @@ program coupler_main
     endif
 
     !> write out intermediate restart file when needead.
-    if (Time >= Time_restart) &
+    if ((Time >= Time_restart .and. nc /= num_cpld_calls) .or. (nc == 1 .and. restart_first_time_step)) &
         call coupler_intermediate_restart(Atm, Ice, Ocean, Ocean_state, Ocn_bc_restart, Ice_bc_restart, &
-                                          Time, Time_restart, Time_restart_current, Time_start)
+                                          Time, Time_restart, Time_restart_current, Time_start, nc)
 
     call coupler_summarize_timestep(nc, num_cpld_calls, coupler_chksum_obj, Atm%pe, omp_sec, imb_sec)
 
