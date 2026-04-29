@@ -142,6 +142,8 @@ module full_coupler_mod
   !! The format is (yr,mo,day,hr,min,sec).  When restart_interval
   !! is all zero, no intermediate restart file will be written out
   integer, dimension(6), public :: restart_interval = (/ 0, 0, 0, 0, 0, 0/)
+  integer, dimension(6), public :: restart_start = (/ 0, 0, 0, 0, 0, 0/)
+  logical, public :: restart_first_time_step = .false.
 
   !> The date that the current integration starts with.  (See
   !! force_date_from_namelist.)
@@ -230,7 +232,8 @@ module full_coupler_mod
                          concurrent, do_concurrent_radiation, use_lag_fluxes,      &
                          check_stocks, restart_interval, do_debug, do_chksum,      &
                          use_hyper_thread, concurrent_ice, slow_ice_with_ocean,    &
-                         do_endpoint_chksum, combined_ice_and_ocean
+                         do_endpoint_chksum, combined_ice_and_ocean,               &
+                         restart_start, restart_first_time_step
 
   !> coupler_clock_type derived type consist of all clock ids that will be set and used
   !! in full coupler_main.
@@ -810,8 +813,13 @@ contains
     else
        Time_restart = fms_time_manager_set_date(date_restart(1), date_restart(2), date_restart(3),  &
                                date_restart(4), date_restart(5), date_restart(6) )
-       Time_restart = fms_time_manager_increment_date(Time_restart, restart_interval(1), restart_interval(2), &
-            restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
+       if (ALL(restart_start ==0)) then
+          Time_restart = fms_time_manager_increment_date(Time_restart, restart_interval(1), restart_interval(2), &
+               restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
+       else
+          Time_restart = fms_time_manager_increment_date(Time_restart, restart_start(1), restart_start(2), &
+               restart_start(3), restart_start(4), restart_start(5), restart_start(6) )
+       endif
        if (Time_restart <= Time) call fms_mpp_error(FATAL, &
             '==>Error from program coupler: The first intermediate restart time is no larger than the start time')
     endif
@@ -2350,7 +2358,7 @@ contains
   !! is produced in the latter calls.  Time_restart is the next timestep where the intermediate restart
   !! file will be written out.  Time_restart_current records the current restart time.
   subroutine coupler_intermediate_restart(Atm, Ice, Ocean, Ocean_state, Ocn_bc_restart, Ice_bc_restart,&
-                                          Time_current, Time_restart, Time_restart_current, Time_start)
+                                          Time_current, Time_restart, Time_restart_current, Time_start, nc)
 
     implicit none
     type(atmos_data_type),   intent(inout) :: Atm    !< Atm
@@ -2364,6 +2372,7 @@ contains
     !! Time_restart_current records the current timestep the restart file is being written.
     !! Time_restart_current does not necessary = Time_restart.
     type(FmsTime_type), intent(inout) :: Time_restart, Time_restart_current
+    integer, intent(in) :: nc      !< coupled timestep loop index
     character(len=32) :: timestamp !< Time in string
     integer :: outunit             !< stdout
 
@@ -2383,8 +2392,10 @@ contains
     call coupler_restart(Atm, Ice, Ocean, Ocn_bc_restart, Ice_bc_restart, &
                          Time_current, Time_restart_current, Time_start, timestamp)
 
-    Time_restart = fms_time_manager_increment_date(Time_current, restart_interval(1), restart_interval(2), &
-                   restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
+    if (nc > 1) then
+      Time_restart = fms_time_manager_increment_date(Time_current, restart_interval(1), restart_interval(2), &
+                     restart_interval(3), restart_interval(4), restart_interval(5), restart_interval(6) )
+    endif
 
   end subroutine coupler_intermediate_restart
 
